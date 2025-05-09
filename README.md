@@ -1,210 +1,253 @@
 # NKI Llama
 
-📢 Contestants, please note that we have updated the due date to March 10, anywhere on Earth. This is to allow for more time to address questions about benchmarking, which is both the purpose of the competition and core to the success metric. 
+A unified project for fine-tuning, inference, and agent development of Llama models on AWS Neuron hardware.
 
-## Getting Started
+## Project Workflow
 
-This repository provides a package containing the PyTorch model of Llama 3.2 1B. This model **can be compiled with AWS Neuron SDK and run on** a **Trainium instance.** The main file in this package is `llama.py` which contains the model implementation in PyTorch.
+```
+┌────────────────┐     ┌────────────────┐     ┌────────────────┐
+│                │     │                │     │                │
+│   Fine-tune    │────▶│   Inference    │────▶│     Agent      │
+│                │     │                │     │  Development   │
+│                │     │                │     │                │
+└────────────────┘     └────────────────┘     └────────────────┘
+```
 
-In the `llama.py` file, we provide an example NKI kernel for the [RMSNorm operation](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/general/nki/tutorials/rmsnorm.html) and a guide on how to replace its invocation in the model. This replacement serves as an example of a valid use of a NKI kernel in the PyTorch model. Your task is to identify other parts of the model (operators, fused operators, layers, or even the whole model\!) that can be implemented as NKI kernels and replace them in the original model to achieve better performance.
+This project follows a three-stage workflow:
+1. **Fine-tune** a model using Neuron hardware with NxD
+2. **Inference** using the fine-tuned model with vLLM, NKI compilation, and NxDI (Neuron Distributed Inference)
+3. **Agent Development** using LangChain/LangGraph connected to your model
 
-To learn NKI, follow [the official NKI guide](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/general/nki/index.html) and various example NKI kernels from the [nki-samples repository](https://github.com/aws-neuron/nki-samples). Another tool to help with optimizing NKI kernels is [NKI autotune](https://github.com/awslabs/nki-autotune).
+## Technical Infrastructure
+
+### Compute Resources
+- **Required Instance**: trn1.32xlarge
+- **Base AMI**: Deep Learning AMI Neuron (Ubuntu 22.04)
+- **Base Packages**:
+  - NxD (NeuronX Distributed Training)
+  - NKI (Neuron Kernel Interface)
+  - NxDI (Neuron Distributed Inference)
+
+## Project Structure
+
+This repository contains three main components:
+- **Fine-tuning**: Tools for fine-tuning LLMs on Neuron hardware using NxD
+- **Inference**: Infrastructure for efficient inference using vLLM with NKI compilation and NxDI optimization
+- **Agent Development**: Building intelligent agents with LangChain/LangGraph
 
 ## Setup Steps
 
 1. Create a Trainium instance with AWS Neuron SDK v2.21 using EC2 with the following settings:
-    1. **Name:** optnki-[xxx]
+    1. **Name:** nki-llama
     2. **AMI:** Deep Learning AMI Neuron (Ubuntu 22.04)
-    3. **Instance type:** trn1.2xlarge
+    3. **Instance type:** trn1.32xlarge
     4. **Key pair (login):** create a new key pair
-    5. **Metadata version [under “Advanced details”]:** V2 only (otherwise, you will encounter a not authorized error)
-    6. When connecting to these instances via SSH, use the username of *ubuntu*.
-2. Activate the Neuron virtual environment to run inference by running `source /opt/aws_neuronx_venv_pytorch_2_5_nxd_inference/bin/activate`.
-3. Clone this repository and run `cd [PATH]/nki-llama` where `[PATH]` is the directory where you have performed the clone.
-4. Download the [Llama3.2-1B](https://huggingface.co/meta-llama/Llama-3.2-1B) model to a `~/models` folder in your root directory. We recommend doing so using the [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/en/guides/cli). You can install this by running `pip3 install huggingface_hub[cli]`. You will also need to create an [access token](https://huggingface.co/docs/hub/en/security-tokens). 
-To download the models, run the following:
-    ```
-    cd ~
-    mkdir models
-    huggingface-cli download --token YOURTOKEN meta-llama/Llama-3.2-1B --local-dir /home/ubuntu/models/llama-3.2-1b
-    ```
-5. [Llama3.2-1B Instruct](https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct) may be more fun to chat with. You can download and use this model as well.
-6. To run inference, navigate to `[PATH]/nki-llama` and run `python main.py --mode generate`.
+    5. When connecting to these instances via SSH, use the username of *ubuntu*.
 
-## NKI Kernel Example
-The following steps provide an example of how to utilize NKI kernels in the Llama3.2-1B model:
+2. Clone this repository and navigate to it:
+   ```bash
+   git clone [REPO_URL]
+   cd [PATH]/nki-llama
+   ```
 
-1. Identify the kernel of interest, e.g. RMSNorm, in the PyTorch model to be optimized with NKI. In the NxDI repository, it is implemented in [modules/custom_calls.py](https://github.com/aws-neuron/neuronx-distributed-inference/blob/main/src/neuronx_distributed_inference/modules/custom_calls.py).
+3. Create your `.env` file by copying the provided example:
+   ```bash
+   cp .env.example .env
+   # Edit .env file with your preferred settings
+   nano .env
+   ```
 
-    ```
-    class CustomRMSNorm(nn.Module):
-        def __init__(self, hidden_size, eps=1e-6):
-            """
-            Use this RMSNorm to perform customized rmsnorm on Neuron
-            Note: CustomRMSNorm forward method calls target="AwsNeuronRmsNorm"
-            """
-            super().__init__()
-            self.weight = nn.Parameter(ones(hidden_size))
-            self.variance_epsilon = eps
-    
-        def forward(self, hidden_states):
-            original_dtype = hidden_states.dtype
-    
-            hidden_states = hidden_states.to(torch.float32)
-            result = RmsNorm.apply(
-                hidden_states, self.weight, self.variance_epsilon, len(hidden_states.shape) - 1
-            )
-    
-            return result.to(original_dtype)
-    ```
+## Environment Setup
 
-2. Modify or create a new class for the NKI kernel. `nki_rmsnorm_kernel` refers to the NKI RMSNorm kernel. 
+This project requires three different Python environments:
 
-    a. Modify the existing class:
+1. **Fine-tuning Environment**:
+   ```bash
+   source /opt/aws_neuronx_venv_pytorch_2_5/bin/activate
+   ```
 
-    ```
-    class CustomRMSNorm(nn.Module):
-        def __init__(self, hidden_size, eps=1e-6, nki_enabled=False):
-            """
-            Use this RMSNorm to perform customized rmsnorm on Neuron
-            Note: CustomRMSNorm forward method calls target="AwsNeuronRmsNorm"
-            """
-            super().__init__()
-            self.weight = nn.Parameter(ones(hidden_size))
-            self.variance_epsilon = eps
-            self.nki_enabled = nki_enabled
-    
-        def forward(self, hidden_states):
-            if self.nki_enabled:
-                out_tensor = nki_rmsnorm_kernel(hidden_states, self.weight, self.variance_epsilon)
-                return out_tensor
-            
-            original_dtype = hidden_states.dtype
-    
-            hidden_states = hidden_states.to(torch.float32)
-            result = RmsNorm.apply(
-                hidden_states, self.weight, self.variance_epsilon, len(hidden_states.shape) - 1
-            )
-    
-            return result.to(original_dtype)
-    ```
+2. **Inference Environment**:
+   ```bash
+   source /opt/aws_neuronx_venv_pytorch_2_5_nxd_inference/bin/activate
+   ```
 
-    b. Create a new class (this is not what was done in this tutorial):
+3. **Jupyter Environment** (for agent development):
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   make inference-jupyter  # Sets up Jupyter and installs required packages
+   ```
 
-    ```
-    class CustomRMSNormNKI(nn.Module):
-        def __init__(self, hidden_size, eps=1e-6):
-            """
-            Use this RMSNorm to perform customized rmsnorm on Neuron
-            Note: CustomRMSNorm forward method calls target="AwsNeuronRmsNorm"
-            """
-            super().__init__()
-            self.weight = nn.Parameter(ones(hidden_size))
-            self.variance_epsilon = eps
-    
-        def forward(self, hidden_states):
-            out_tensor = nki_rmsnorm_kernel(hidden_states, self.weight, self.variance_epsilon)
-            return out_tensor
-    ```
-1. You may need to add a batch dimension to input tensor(s), e.g. `a_tensor`. Also be aware of uninitialized data.
+## Fine-tuning Workflow
 
-    ```
-    # iy = nl.arange(a_tensor.shape[1])[None, :]
-    iy = nl.arange(a_tensor.shape[2])[None, :]
-    
-    # num_rows = a_tensor.shape[0]
-    num_rows = a_tensor.shape[1]
-    ```
-    
-1. If you modified the existing class, update how the class is invoked in the PyTorch model file `llama.py`.
+Our Makefile simplifies the fine-tuning process:
 
-    ```
-    ...
-        self.input_layernorm = get_rmsnorm_cls()(
-            config.hidden_size,
-            eps=config.rms_norm_eps,
-            nki_enabled=config.neuron_config.nki_enabled,
-        )
-    self.post_attention_layernorm = get_rmsnorm_cls()(
-        config.hidden_size,
-        eps=config.rms_norm_eps,
-        nki_enabled=config.neuron_config.nki_enabled,
-    )
-    ```
+```bash
+# Activate the fine-tuning environment
+source /opt/aws_neuronx_venv_pytorch_2_5/bin/activate
 
-    If you created a new class, modify where the kernel is invoked in the PyTorch model file `llama.py` (not done in this tutorial).
+# Install dependencies
+make finetune-deps
 
-    ```
-    def get_rmsnorm_cls():
-        # Initialize to the appropriate implementation of RMSNorm
-        # If infer on NXD -> CustomRMSNorm
-        # If infer on CPU -> HF_RMSNorm (CustomRMSNorm does not work on CPU)
-        # return CustomRMSNorm if parallel_state.model_parallel_is_initialized() else LlamaRMSNorm
-        return CustomRMSNormNKI if parallel_state.model_parallel_is_initialized() else LlamaRMSNorm
-    ```
+# Download dataset
+make finetune-data
 
-1. Run inference on a single prompt using the NKI kernel and the single evaluation mode by running `python main.py --enable-nki --mode evaluate_single`. If you would like to run the model with specific prompts, pass in `--prompt [PROMPTS]` where `[PROMPTS]` is a comma-separated list of prompts.
+# Download model
+make finetune-model
 
-## Additional Tools
+# Convert checkpoint to NxDT format
+make finetune-convert
 
-1. **Profiling:** If you would like to profile your implementation in order to get a better understanding of performance bottlenecks and opportunities for optimization, you can use the [Neuron Profiler](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/tools/neuron-sys-tools/neuron-profile-user-guide.html).
-2. **Benchmarking:** You can also leverage the [NKI benchmarking API](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/general/nki/api/generated/nki.benchmark.html) to retrieve execution latency statistics. 
+# Pre-compile graphs (AOT)
+make finetune-precompile
 
-## Submission
+# Run fine-tuning job
+make finetune-train
+```
 
-Your submission should be a single Python file called `llama.py`. This file should contain implementations of NKI kernels and also modifications to the original model to invoke these NKI kernels. This file should work as a plug-in replacement for the original `llama.py` of the reference PyTorch implementation provided in this repository.
+## Inference Workflow
 
-Make your submission here: https://forms.gle/zZKKS6RzKcerf4vH8
+The inference pipeline includes NKI (Neuron Kernel Interface) compilation and NxDI (Neuron Distributed Inference) integration with vLLM for optimal performance on Neuron hardware.
 
-## Benchmarks
+Use our Makefile to simplify the setup and execution process for inference:
 
-Submissions will be tested using 25 benchmarks (prompts) with varying context lengths (TBD, but likely 1K \-\> 128K) and batch sizes (TBD, but likely 1-\>4). We have provided 5 prompts in `prompts.txt` with their corresponding metadata (prompt ID, prompt length, recommended sequence length, and baseline latency/throughput) in `prompt_data.txt`. There are 2 methods of testing these prompts:
+```bash
+# Activate the inference environment
+source /opt/aws_neuronx_venv_pytorch_2_5_nxd_inference/bin/activate
 
-1. To avoid recompilation per prompt, you can use a global sequence length (we suggest 640) for all prompts. Run `python main.py --enable-nki --mode evaluate_all --seq-len 640`.
-2. Alternatively, you can use a unique sequence length for each prompt (suggested sequence lengths are the third entry in each row of `prompt_data.txt`) at the cost of recompiling the model for each prompt. Run `python test.py` to evaluate these prompts in this fashion.
+# Setup vLLM for Neuron
+make inference-setup
 
-The remaining 20 prompts will be withheld for evaluation. All benchmarks will become publicly available after the contest is complete.
+# Download model from Hugging Face (you'll need a HF token)
+# (skip this step if using your fine-tuned model)
+make inference-download
 
-## Evaluation and Scoring
+# The model will be automatically compiled with NKI and optimized for NxDI
+# when the server starts for the first time
 
-The contest organizers will execute each team's submission across the twenty withheld benchmarks on a dedicated Trainium instance. The submissions will be evaluated on:
+# Start the vLLM OpenAI-compatible API server with NxDI
+make inference-server
+```
 
-1) Accuracy of generated output vs. our reference implementation. Accuracy evaluation will be a binary assessor: Any benchmark that fails an accuracy threshold will result in a score of 0\.   
-2) Latency (Time to first token (TTFT))  
-3) Throughput measured as output tokens / second  
-4) Amount of model written in NKI (measured as NKI FLOPS / total model FLOPS) (will be applied as a scaling factor for (b) and (c)). Note: NKI FLOPs measures the number of multiply-accumulate (MAC) operations.
+### Environment Configuration
 
-Rankings will be established by calculating the total normalized number of points per team, where points are normalized against the baseline.
+The repository includes a `.env.example` file with template configuration. Copy this file to create your own `.env`:
 
-We define **points** as **Accuracy** (binary) **\* Reduced Latency \* Increased Throughput \* (1 + Normalized NKI FLOPS)**, where:
+```
+# Model configuration
+MODEL_NAME=llama-3.2-3b-instruct
 
-* **Accuracy** = 1 if accuracy matches or exceeds a predetermined threshold, 0 otherwise  
-* **Reduced Latency** = Reference implementation TTFT divided by submission TTFT  
-* **Increased Throughput** = Submission tokens/sec divided by reference implementation tokens/sec  
-* **Normalized NKI FLOPS** = Submission NKI FLOPS divided by total model FLOPS
+# Compiled model directory for NKI artifacts
+COMPILED_MODEL_DIR=~/traced_model
 
-For example, a submission that is sufficiently accurate, with 10x reduced latency, 2x increased throughput, and 0.85 normalized NKI FLOPS would obtain 1 \* 10 \* 2 \* 1.85 \= 37 points. For reference, the baseline submission would receive a score of 1.
+# Server configuration
+PORT=8080
+MAX_MODEL_LEN=2048
+TENSOR_PARALLEL_SIZE=8
+```
 
-## Presentations
+The Makefile will automatically load this configuration if present, or prompt you for values if not set.
 
-Teams who successfully submit an entry will be invited to present an informal overview of their approach (roughly 10 to 15 minutes) at a special session held on March 30th during the [Workshop & Tutorial](https://www.asplos-conference.org/asplos2025/workshops-and-tutorials/) days.  Winners will be announced later in the week, with full results being released soon after the conference.
+### Running Inference
 
-## Contest Eligibility
+The Makefile provides several commands for running inference and evaluation:
 
-All are welcome to participate in the contest (including teams from academia, industry, and elsewhere) with the exception of the Contest Organizers and employees of the Contest Sponsor. Individuals are prohibited from participating in multiple teams. In order to be eligible for prizes, teams must commit to releasing an open-source version of their implementation prior to ASPLOS 2026\.
+```bash
+# Run inference in generate mode
+make inference-infer
 
-## Frequently Asked Questions
+# Run in evaluate mode
+make inference-evaluate
+```
 
-To raise a question, please create an issue in this repository, or feel free to reach out to the contest organizers directly.
+## Agent Development
 
-## Related Work
+This repository includes support for building LLM-powered agents using LangGraph and LangChain. A sample travel planning agent is included that demonstrates how to build a stateful agent workflow with the following capabilities:
 
-* TBD
+- Context-aware travel itinerary generation
+- Multi-turn conversation with memory
+- Dynamic workflow management using LangGraph
+- Integration with VLLMOpenAI for efficient inference on Trainium
 
-## Contest Organizers
+### Jupyter Notebook
 
-* Emery Berger (Amazon Web Services), [emerydb@amazon.com](mailto:emerydb@amazon.com)
-* Aninda Manocha (Amazon Web Services)
-* Wei Tang (Amazon Web Services)
-* Emily Webber (Amazon Web Services)
-* Ziyang Xu (Amazon Web Services)
+The repository includes a Jupyter notebook for developing and testing agents. To use it:
+
+1. Ensure you've started the vLLM server in one terminal: `make inference-server`
+2. Start Jupyter Lab in another terminal:
+   ```bash
+   # Activate the Jupyter environment
+   source venv/bin/activate
+   
+   # Start Jupyter Lab
+   make inference-lab
+   ```
+3. Open the travel planning notebook and select the "neuron_agents" kernel
+
+## Makefile Commands
+
+| Command | Description |
+|---------|-------------|
+| **General** |
+| `make help` | Show help message for all commands |
+| `make clean` | Clean all generated files |
+| **Fine-tuning** |
+| `make finetune` | Run all fine-tuning steps |
+| `make finetune-deps` | Install fine-tuning dependencies |
+| `make finetune-data` | Download datasets for fine-tuning |
+| `make finetune-model` | Download model for fine-tuning |
+| `make finetune-convert` | Convert checkpoint to NxDT format |
+| `make finetune-precompile` | Pre-compile graphs (AOT) |
+| `make finetune-train` | Run fine-tuning job |
+| `make finetune-clean` | Clean up fine-tuning files |
+| **Inference** |
+| `make inference` | Run inference (shortcut to inference-infer) |
+| `make inference-setup` | Setup vLLM for Neuron |
+| `make inference-jupyter` | Setup Jupyter environment |
+| `make inference-download` | Download model from Hugging Face |
+| `make inference-infer` | Run inference in generate mode |
+| `make inference-evaluate` | Run inference in evaluate mode |
+| `make inference-server` | Start vLLM OpenAI-compatible API server |
+| `make inference-lab` | Run Jupyter Lab server |
+| `make inference-clean` | Clean up inference files |
+
+## Environment Requirements
+
+- For fine-tuning: `source /opt/aws_neuronx_venv_pytorch_2_5/bin/activate`
+- For inference: `source /opt/aws_neuronx_venv_pytorch_2_5_nxd_inference/bin/activate`
+- For agent development (Jupyter): `source venv/bin/activate`
+
+## Full Workflow Example
+
+Here's a complete workflow example combining all components:
+
+1. **Fine-tune a model**:
+   ```bash
+   source /opt/aws_neuronx_venv_pytorch_2_5/bin/activate
+   make finetune
+   ```
+
+2. **Serve the model** for inference:
+   ```bash
+   source /opt/aws_neuronx_venv_pytorch_2_5_nxd_inference/bin/activate
+   make inference-setup
+   # You can either use your fine-tuned model or download one
+   # make inference-download
+   
+   # The model will be compiled with NKI and optimized for NxDI
+   # when you first start the server (this may take a few minutes)
+   make inference-server
+   ```
+
+3. **Build agents** with the served model:
+   ```bash
+   # In a new terminal
+   source venv/bin/activate
+   make inference-jupyter
+   make inference-lab
+   # Open the Jupyter notebook and connect to your model
+   ```
+
+---
+
+© 2025 Amazon Web Services. All rights reserved.
