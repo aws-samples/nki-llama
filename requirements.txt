@@ -1,6 +1,0 @@
-langchain-community==0.3.21
-langchain==0.3.23
-langgraph==0.3.31
-openai==1.75.0
-ipykernel==6.29.5
-jupyterlab==4.4.0
