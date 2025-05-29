@@ -7,7 +7,6 @@ import json
 import os
 import time
 import torch
-import re
 
 from torch_neuronx.pyhlo.hlo_pb2 import HloModuleProto
 from torch_neuronx.testing.validation import logit_validation
@@ -25,7 +24,8 @@ from neuronx_distributed_inference.utils.benchmark import create_submodule_laten
 from neuronx_distributed_inference.models.llama import modeling_llama as baseline_llama
 
 # Load the model for ASPLOS contest
-from llama import NeuronLlamaForCausalLM
+#from llama import NeuronLlamaForCausalLM
+import importlib
 from test import *
 
 BENCHMARK_REPORT_FILENAME = "benchmark_report.json"
@@ -37,18 +37,19 @@ def parse_args():
 
     # ASPLOS contest specific
     parser.add_argument("--mode", choices=["evaluate_single", "evaluate_all", "validate", "generate"])
+    parser.add_argument("--llama", type=str, default="llama")
     parser.add_argument("--enable-nki", action="store_true")
     parser.add_argument("--base-latency", type=float, default=526.15)
     parser.add_argument("--base-throughput", type=float, default=134.61)
 
     # Model path
-    parser.add_argument("--model-path", type=str, default="~/models/llama-3.2-3b-instruct/")
+    parser.add_argument("--model-path", type=str, default="/home/ubuntu/models/llama-3.2-1b/")
     parser.add_argument("--compiled-model-path", type=str,
-                        default="~/traced_model/llama-3.2-3b-instruct/")
+                        default="/home/ubuntu/traced_model/llama-3.2-1b/")
 
     # Evaluation
     parser.add_argument("--benchmark", action="store_true")
-    parser.add_argument("--divergence-difference-tol", type=float, default=0.15)
+    parser.add_argument("--divergence-difference-tol", type=float, default=0.001)
     parser.add_argument("--tol-map", type=str)
     parser.add_argument("--num-tokens-to-check", type=int)
 
@@ -104,21 +105,6 @@ def parse_args():
 
     return parser.parse_args()
 
-def parse_prompts(filepath):
-    with open(filepath, 'r') as file:
-        arr = file.read().split('\n\n')
-    arr = [prompt.strip() for prompt in arr if prompt.strip()]
-    return arr
-
-
-def parse_prompt_data(filepath):
-    with open(filepath, 'r') as file:
-        content = file.read()
-
-    blocks = content.split('\n')
-    if blocks[-1] == '':
-        blocks = blocks[0:-1]
-    return [block.split(',') for block in blocks]
 
 def validate_file_exists(path):
     if not os.path.exists(path) or not os.path.isfile(path):
@@ -140,9 +126,6 @@ def prepare_inference(model_cls, args):
     # Skip values not specified in the args to avoid setting values to None in the config.
     config_kwargs = copy.deepcopy(vars(args))
     config_kwargs = {k: v for k, v in config_kwargs.items() if v is not None}
-    
-    args.model_path = os.path.expanduser(args.model_path)
-    args.compiled_model_path = os.path.expanduser(args.compiled_model_path)
 
     if args.on_device_sampling:
         config_kwargs["on_device_sampling_config"] = OnDeviceSamplingConfig(**config_kwargs)
@@ -425,7 +408,10 @@ def run_accuracy_check(
     return True
 
 
-def count_nki_flop_ratio(hlo_path_context_enc, hlo_path_token_gen):
+def count_nki_flop_ratio(
+    hlo_path_context_enc="/tmp/nxd_model/context_encoding_model/_tp0_bk0/model/graph.hlo",
+    hlo_path_token_gen="/tmp/nxd_model/token_generation_model/_tp0_bk0/model/graph.hlo"
+):
     hlo_macs = 0
     nki_macs = 0
 
@@ -511,34 +497,22 @@ def count_nki_flop_ratio(hlo_path_context_enc, hlo_path_token_gen):
 
 
 def calculate_score(base_latency, base_throughput, accuracy, latency, throughput, nki_flop_ratio):
+    
 
     increased_throughput = throughput / base_throughput
     reduced_latency = base_latency / latency
 
     final_score = accuracy * reduced_latency * increased_throughput * (1 + nki_flop_ratio)
 
+    print ('In this final score of ', final_score, ' the contestant got a breakdown as follows.')
+    print ('accuracy: ', accuracy)
+    print ('reduced_latency: ', reduced_latency)
+    print ('increased throughput: ',  increased_throughput)
+    print ('nki flop ratio: ', nki_flop_ratio)
+    
     return final_score
 
-def get_hlo(file_dir):
-    rt = '0'        
-    
-    for filename in os.listdir(file_dir):
-        
-        name_split = filename.split('.')
-    
-        if len(name_split) > 3:
 
-            # based on Neuron SDK 2.23 NxDI naming structure for HLO graph
-            assert name_split[0] == 'model' and name_split[2] == 'hlo_module'
-
-            rt = os.path.join(file_dir, filename)
-
-    # try again with different naming structure
-    if len(rt) <= 1: 
-        rt = os.path.join(file_dir, 'model/graph.hlo')
-            
-    return rt
-        
 def main():
     args = parse_args()
     if not args.prompts:
@@ -547,8 +521,9 @@ def main():
     args.max_length = args.seq_len
     args.tol_map = "{None: (1e-5, 0.05), 1000: (1e-5, 0.03), 50: (1e-5, 0.03), 5: (1e-5, 0.03)}"
     
+    llama = importlib.import_module(args.llama)
     base_model, _, base_generation_config = prepare_inference(baseline_llama.NeuronLlamaForCausalLM, args)
-    model, tokenizer, generation_config = prepare_inference(NeuronLlamaForCausalLM, args)
+    model, tokenizer, generation_config = prepare_inference(llama.NeuronLlamaForCausalLM, args)
 
     if args.mode == "generate":
         run_generation(
@@ -594,13 +569,7 @@ def main():
         latency = report["e2e_model"]["latency_ms_p99"]
         throughput = report["e2e_model"]["throughput"]
 
-        hlo_context_enc = get_hlo("/tmp/nxd_model/context_encoding_model/_tp0_bk0/")
-        hlo_token_gen = get_hlo("/tmp/nxd_model/token_generation_model/_tp0_bk0/")
-
-        nki_flop_ratio = count_nki_flop_ratio(
-            hlo_path_context_enc=hlo_context_enc,
-            hlo_path_token_gen=hlo_token_gen
-        )
+        nki_flop_ratio = count_nki_flop_ratio()
 
         score = calculate_score(args.base_latency, args.base_throughput, accuracy, latency, throughput, nki_flop_ratio)
         print(
@@ -614,8 +583,8 @@ def main():
         
     elif args.mode == "evaluate_all":
 
-        prompts = parse_prompts("../../data/prompts.txt")
-        prompt_data = parse_prompt_data("../../data/prompt_data.txt")
+        prompts = parse_prompts("prompts.txt")
+        prompt_data = parse_prompt_data("prompt_data.txt")
         assert len(prompts) == len(prompt_data)
 
         total_score = 0
@@ -638,18 +607,13 @@ def main():
                 num_tokens_to_check=args.num_tokens_to_check,
             )
 
+            _ = benchmark_sampling(base_model, tokenizer, base_generation_config, args.prompts)
             report = benchmark_sampling(model, tokenizer, generation_config, [prompt])
 
             latency = report["e2e_model"]["latency_ms_p99"]
             throughput = report["e2e_model"]["throughput"]
-            
-            hlo_context_enc = get_hlo("/tmp/nxd_model/context_encoding_model/_tp0_bk0/")
-            hlo_token_gen = get_hlo("/tmp/nxd_model/token_generation_model/_tp0_bk0/")
-            
-            nki_flop_ratio = count_nki_flop_ratio(
-                hlo_path_context_enc=hlo_context_enc,
-                hlo_path_token_gen=hlo_token_gen
-            )
+
+            nki_flop_ratio = count_nki_flop_ratio()
 
             score = calculate_score(base_latency, base_throughput, accuracy, latency, throughput, nki_flop_ratio)
             print(
@@ -662,7 +626,7 @@ def main():
             )
             total_score += score
 
-        print(f"Total Score: {total_score}\n")
+        print(f"\nTotal Score: {total_score}\n")
 
     else:
         assert False, "Undefined mode"

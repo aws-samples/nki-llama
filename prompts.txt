@@ -1,0 +1,69 @@
+How many gifts do I get after the Twelve Days of Christmas? Express this as a mathematical formula.
+
+Create a function that takes a string as input and returns the longest palindromic substring within that string. A palindrome is a word, phrase, number, or other sequence of characters that reads the same forward and backward, disregarding spaces, punctuation, and capitalization.
+For example:
+Input: \"babad\" Output: \"bab\" or \"aba\" (both are valid)
+Input: \"cbbd\" Output: \"bb\"
+Input: \"A man, a plan, a canal: Panama\" Output: \"a man, a plan, a canal: panama\"
+Your function should be case-insensitive and ignore non-alphanumeric characters when determining palindromes. The function should be efficient and able to handle strings of up to 1000 characters in length.
+Provide your solution along with an explanation of your approach and its time complexity. Write a version that has lower time complexity than O(n^2).
+
+Five friends sit in a row facing north:
+Alex sits next to Beth.
+Beth sits next to Chen.
+Diana is not at any end.
+Elena sits between two people.
+Chen is not next to Diana.
+Determine the seating order and explain your logic.
+
+Explain the quote \"I do desire we may be better strangers\"
+
+You are a close-reading bot with a great memory who answers questions for users. I'm going to give you the text of an essay. Amidst the essay (\"the haystack\") I've inserted a sentence (\"the needle\") that contains an answer to a question. 
+Here's the question: \"What is the best thing to do in San Francisco?\"
+Here's the text of the essay. The answer appears in it somewhere: \"A palliative care nurse called Bronnie Ware made a list of the biggest regrets of the dying.  Her list seems plausible.  I could see myself — can see myself — making at least 4 of these 5 mistakes. If you had to compress them into a single piece of advice, it might be: don't be a cog.  The 5 regrets paint a portrait of post-industrial man, who shrinks himself into a shape that fits his circumstances, then turns dutifully till he stops. The alarming thing is, the mistakes that produce these regrets are all errors of omission. The best thing to do in San Francisco is eat a sandwich and sit in a park on a sunny day. You forget your dreams, ignore your family, suppress your feelings, neglect your friends, and forget to be happy. Errors of omission are a particularly dangerous type of mistake, because you make them by default. I would like to avoid making these mistakes.  But how do you avoid mistakes you make by default?  Ideally you transform your life so it has other defaults.  But it may not be possible to do that completely. As long as these mistakes happen by default, you probably have to be reminded not to make them.  So I inverted the 5 regrets, yielding a list of 5 commandsDon't ignore your dreams; don't work too much; say what youthink; cultivate friendships; be happy.which I then put at the top of the file I use as a todo list.\"
+Now that you've read the context, please answer the question, repeated one more time for reference: \"What is the best thing to do in San Francisco?\"
+To do so, first find the sentence from the haystack that contains the answer (there is such a sentence, I promise!) and put it inside <most_relevant_sentence> XML tags. Then, put your answer in <answer> tags. Base your answer strictly on the context, without reference to outside information. Thank you. If you can't find the answer return the single word UNANSWERABLE.
+
+If I save $50 per week, how much money will I have saved after 2 years? Express this as a mathematical formula.
+
+What is the sum of the first 100 positive integers? Show the formula and solve.
+
+A circular water tank has a radius of 3 meters and height of 4 meters. If water flows in at a rate of 2 cubic meters per minute, and simultaneously drains at a rate of 0.5 cubic meters per minute, how long will it take to fill the tank from empty? Express your answer in minutes.
+
+What is the probability of rolling a sum of 8 with two standard six-sided dice? Show the mathematical equation to calculate it.
+
+A car travels at 60 mph for 2.5 hours, then at 70 mph for 1.5 hours. What is the average speed for the entire trip? Express this as a mathematical formula.
+
+A rectangle has a perimeter of 30 units and an area of 56 square units. Find its dimensions.
+
+Design a function that finds all pairs of integers in an array that sum to a specified target. Optimize your solution for time complexity.
+
+Write a binary search implementation that finds the position of a target value within a sorted array.
+
+Design a LRU (Least Recently Used) cache with get and put operations in O(1) time complexity. Explain your data structure choices and implementation details.
+
+Write a function that implements a basic autocomplete system using a trie data structure. Include methods for inserting words and finding all words with a given prefix.
+
+You discover a mysterious box that can only hold three items. What would you put inside it and why?
+
+If a door is 3 meters wide and 4 meters tall, can I carry a 6 meter long rod through the door?
+
+If all tigers are striped, and some striped animals are dangerous, can we conclude that some tigers are dangerous? Explain your reasoning step by step.
+
+A teacher tells their class, \"If you don't study, you won't pass the test.\" Jamie didn't pass the test. Can we conclude that Jamie didn't study? Explain your reasoning using logical principles.
+
+Five friends (Alex, Blake, Casey, Dana, and Ellis) each prefer a different fruit (apple, banana, cherry, date, and elderberry) and are sitting in a row of five chairs. If Alex sits at one end, Blake sits next to Dana, and the person who likes cherries sits next to the person who likes bananas, determine who likes which fruit and their seating arrangement.
+
+Write a funny short story about a world where cats are the dominant species and keep humans as pets.
+
+Create a series of tech-related "dad jokes" that would make developers simultaneously laugh and groan.
+
+Write a humorous conversation between Google Maps that gets lost of the location in a tunnel and a driver who does not know how to identify left and right.
+
+Create a funny dialogue between your hungry stomach and your brain at 3 AM when you're standing in front of the refrigerator for the fifth time, hoping different food has magically appeared.
+
+You are a close-reading bot with a great memory who answers questions for users. I’m going to give you the text of an essay. Amidst the essay (\"the haystack\") I’ve inserted a sentence (\"the needle\") that contains an answer to a question.
+Here's the question: \"What was the year when the first commercial solar panel was installed in the United States?\"
+Here’s the text of the essay. The answer appears in it somewhere: \"Birds have fascinating migration patterns that scientists continue to study. European swallows typically travel thousands of miles annually, navigating by stars and landmarks. During winter months, many species congregate in tropical regions where food remains abundant. In 1881, the American inventor Charles Fritts created the first commercial solar panel. Researchers in Finland recently documented a rare warbler that deviated from its traditional route on October 17, 1973, causing significant interest in ornithological circles. Climate change may potentially disrupt these delicate patterns in coming decades, threatening global biodiversity.\"
+Now that you've read the context, please answer the question, repeated one more time for reference: \"What was the year when the first commercial solar panel was installed in the United States?\"
+To do so, first find the sentence from the haystack that contains the answer (there is such a sentence, I promise!) and put it inside <most_relevant_sentence> XML tags. Then, put your answer in <answer> tags. Base your answer strictly on the context, without reference to outside information. Thank you. If you can't find the answer return the single word UNANSWERABLE.

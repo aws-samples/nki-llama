@@ -1,5 +1,4 @@
 import subprocess
-import argparse
 
 
 def parse_prompts(filepath):
@@ -18,21 +17,13 @@ def parse_prompt_data(filepath):
         blocks = blocks[0:-1]
     return [block.split(',') for block in blocks]
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-
-    # repository path
-    parser.add_argument("--repository-path", type=str, default="~/nki-llama")
-    
-    return parser.parse_args()
 
 def main():
-    args = parse_args()
-    prompts = parse_prompts(f"{args.repository_path}/data/prompts.txt")
-    prompt_data = parse_prompt_data(f"{args.repository_path}/data/prompt_data.txt")
+    prompts = parse_prompts("prompts.txt")
+    prompt_data = parse_prompt_data("prompt_data.txt")
     assert len(prompts) == len(prompt_data)
 
-    mode = "evaluate_single"
+    mode = "evaluate"
 
     # Iterate through the prompts
     for i, prompt in enumerate(prompts):
@@ -40,8 +31,8 @@ def main():
         seq_len = data[2]
         latency = data[3]
         throughput = data[4]
- 
-        command = f'python {args.repository_path}/src/inference/main.py --enable-nki --mode {mode} --seq-len {seq_len} --base-latency {latency} --base-throughput {throughput} --prompt "{prompt}"'
+
+        command = f'python main.py --enable-nki --mode {mode} --seq-len {seq_len} --base-latency {latency} --base-throughput {throughput} --prompt "{prompt}"'
         print(command)
         
         with open(f'prompt{i}_out.txt', 'w') as outfile:
