@@ -36,67 +36,36 @@ from neuronx_distributed.parallel_layers import parallel_state  # noqa: E402
 import math
 import warnings
 from typing import (
-    Optional, Tuple, Union, Any, Callable, Dict, Type, cast
+    Optional, Tuple, Union, Any, Type
 )
-import os
-import torch.distributed
+
 import torch.nn.functional as F
-import torch.nn.grad as grad
-import torch.nn.init as init
-import torch_xla.core.xla_model as xm
-from torch.distributed import ProcessGroup
-from torch.nn.parameter import Parameter
-from neuronx_distributed.parallel_layers.parallel_state import (
-    get_tensor_model_parallel_group,
-    get_tensor_model_parallel_rank,
-    get_tensor_model_parallel_size,
-    get_aot_mode
-)
-from neuronx_distributed.parallel_layers.utils import (
-    EmbeddingUtility,
-    cast_if_autocast_enabled,
-    divide,
-    get_padding_length,
-    is_torch_version_greater_than_2,
-    set_tensor_model_parallel_attributes,
-    verify_casted_dtype,
-)
+
 from neuronx_distributed.parallel_layers.mappings import (
-    _gather_along_dim,
-    _reduce_scatter_along_dim,
     copy_to_tensor_model_parallel_region,
     gather_from_tensor_model_parallel_region,
-    gather_from_tensor_model_parallel_region_with_dim,
     reduce_from_tensor_model_parallel_region,
     reduce_scatter_to_sequence_parallel_region,
-    scatter_input_channels_to_tensor_model_parallel_region,
     scatter_to_tensor_model_parallel_region,
     _gather_along_first_dim,  # Added for latest SDK
 )
 from neuronx_distributed.parallel_layers.layers import (  # noqa: E402; noqa: E402; noqa: E402; noqa: E402; noqa: E402
-    BaseParallelLinear,
     RowParallelLinear,
     ColumnParallelLinear,
     ParallelEmbedding,
-    LinearWithAsyncCommunication,
 )
 from neuronx_distributed.parallel_layers.mappings import (
     gather_from_sequence_parallel_region,
     reduce_from_tensor_model_parallel_region,
     reduce_scatter_to_sequence_parallel_region,
 )
-from neuronx_distributed.parallel_layers.utils import get_padding_length
 from neuronx_distributed.utils import cpu_mode  # Added for latest SDK
 
 # Updated imports for latest SDK - includes quantized kernels
 from neuronxcc.nki._private_kernels.mlp import (
     mlp_fused_add_isa_kernel,
-    mlp_isa_kernel,
-    quant_mlp_fused_add_isa_kernel,  # New in latest SDK
-    quant_mlp_isa_kernel,  # New in latest SDK
+    mlp_isa_kernel
 )
-from neuronxcc.nki._private_kernels.rmsnorm import rmsnorm_quant_isa_kernel  # New in latest SDK
-from neuronxcc.nki.language import nc  # Added for latest SDK
 
 from torch import nn, ones
 from torch_neuronx.xla_impl.ops import nki_jit
@@ -116,7 +85,6 @@ from neuronx_distributed_inference.modules.attention.gqa import (  # noqa: E402
 from neuronx_distributed_inference.modules.attention.utils import (
     RotaryEmbedding,
     transpose_parallel_linear_layer,
-    preprocess_quantized_linear_layer,  # Added for latest SDK
 )
 
 # Updated import for latest SDK

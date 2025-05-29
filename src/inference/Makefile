@@ -57,6 +57,7 @@ help:
 show-env:
 	@echo "Environment variables loaded from .env file:"
 	@echo "----------------------------------------"
+	@echo "MODEL_ID: $(MODEL_ID)"
 	@echo "MODEL_NAME: $(MODEL_NAME)"
 	@echo "MODELS_DIR: $(MODELS_DIR)"
 	@echo "COMPILED_MODEL_DIR: $(COMPILED_MODEL_DIR)"
@@ -111,14 +112,14 @@ check-vllm:
 # Check or set MODEL_NAME environment variable
 .PHONY: check-model-name
 check-model-name:
-	@if [ -z "$(MODELS_DIR)/$(MODEL_NAME)" ]; then \
+	@if [ -z "$(MODEL_NAME)" ]; then \
 		echo "MODEL_NAME environment variable is not set"; \
 		echo "You can set it permanently in .env file or with: export MODEL_NAME=your_model_path"; \
-		read -p "Enter model name for this session (default: $(MODELS_DIR)/llama-3.2-3b-instruct): " model_name; \
-		if [ -z "$(MODELS_DIR)/$$model_name" ]; then \
-			export MODEL_NAME="$(MODELS_DIR)/llama-3.2-3b-instruct"; \
+		read -p "Enter model name for this session (default: llama-3.2-3b-instruct): " model_name; \
+		if [ -z "$$model_name" ]; then \
+			export MODEL_NAME="llama-3.2-3b-instruct"; \
 		else \
-			export MODEL_NAME="$(MODELS_DIR)/$$model_name"; \
+			export MODEL_NAME="$$model_name"; \
 		fi; \
 		echo "Using model: $$MODEL_NAME"; \
 	else \
@@ -154,29 +155,49 @@ setup-vllm: check-neuron-venv
 .PHONY: download
 download: check-neuron-venv
 	@echo "Downloading model from Hugging Face"
-	@echo "You will need a Hugging Face access token."
-	@echo "Get one at: https://huggingface.co/docs/hub/en/security-tokens"
-	@echo ""
-	@if [ -n "$(HF_TOKEN)" ]; then \
-		echo "Using HF_TOKEN from .env file"; \
-		TOKEN="$(HF_TOKEN)"; \
+	@if [ -z "$(MODEL_ID)" ]; then \
+		echo "MODEL_ID not set in .env file."; \
+		read -p "Enter HuggingFace model ID (e.g., meta-llama/Meta-Llama-3-8B): " MODEL_ID_INPUT; \
+		if [ -z "$$MODEL_ID_INPUT" ]; then \
+			echo "Error: MODEL_ID is required"; \
+			exit 1; \
+		fi; \
+		MODEL_ID_VAR="$$MODEL_ID_INPUT"; \
 	else \
-		read -p "Enter your Hugging Face token: " TOKEN; \
+		MODEL_ID_VAR="$(MODEL_ID)"; \
+		echo "Using MODEL_ID from .env: $$MODEL_ID_VAR"; \
 	fi; \
-	read -p "Enter model name (default: meta-llama/llama-3.2-3b-instruct): " MODEL; \
-	MODEL=$${MODEL:-meta-llama/llama-3.2-3b-instruct}; \
-	SHORTNAME=$$(echo $$MODEL | sed 's/.*\///' | tr '[:upper:]' '[:lower:]'); \
-	echo "Downloading $$MODEL to $(MODELS_DIR)/$$SHORTNAME"; \
+	if [ -z "$(HF_TOKEN)" ]; then \
+		echo "HF_TOKEN not set in .env file."; \
+		echo "Get one at: https://huggingface.co/docs/hub/en/security-tokens"; \
+		read -p "Enter your Hugging Face token: " TOKEN; \
+		if [ -z "$$TOKEN" ]; then \
+			echo "Error: HF_TOKEN is required"; \
+			exit 1; \
+		fi; \
+	else \
+		TOKEN="$(HF_TOKEN)"; \
+		echo "Using HF_TOKEN from .env file"; \
+	fi; \
+	SHORTNAME=$$(echo $$MODEL_ID_VAR | sed 's/.*\///' | tr '[:upper:]' '[:lower:]'); \
+	echo "Downloading $$MODEL_ID_VAR to $(MODELS_DIR)/$$SHORTNAME"; \
 	mkdir -p $(MODELS_DIR); \
 	pip install -q huggingface_hub[cli]; \
-	huggingface-cli download --token $$TOKEN $$MODEL --local-dir $(MODELS_DIR)/$$SHORTNAME; \
-	echo "Add to your .env file:"; \
-	echo "MODEL_NAME=$(MODELS_DIR)/$$SHORTNAME"
+	huggingface-cli download --token $$TOKEN $$MODEL_ID_VAR --local-dir $(MODELS_DIR)/$$SHORTNAME; \
+	echo ""; \
+	echo "Download complete!"; \
+	echo "Model saved to: $(MODELS_DIR)/$$SHORTNAME"; \
+	if [ -z "$(MODEL_ID)" ]; then \
+		echo ""; \
+		echo "Add to your .env file:"; \
+		echo "MODEL_ID=$$MODEL_ID_VAR"; \
+		echo "MODEL_NAME=$$SHORTNAME"; \
+	fi
 
 # Start vLLM OpenAI-compatible API server
 .PHONY: start-server
 start-server: check-neuron-venv check-vllm check-model-name
-	@echo "Starting vLLM OpenAI-compatible API server with model: $(MODELS_DIR)/$(MODEL_NAME)"
+	@echo "Starting vLLM OpenAI-compatible API server with model: $(MODEL_NAME)"
 	cd ~ && VLLM_NEURON_FRAMEWORK='neuronx-distributed-inference' NEURON_COMPILED_ARTIFACTS='$(COMPILED_MODEL_DIR)/$(MODEL_NAME)' python -m vllm.entrypoints.openai.api_server \
 		--model="models/$(MODEL_NAME)" \
 		--max-num-seqs=4 \
@@ -196,7 +217,7 @@ jupyter: check-local-venv
 .PHONY: infer
 infer: check-neuron-venv check-model-name
 	@echo "Running inference in generate mode with model: $(MODEL_NAME)"
-	$(PYTHON) $(MAIN_SCRIPT) --mode generate --model-path "$(MODELS_DIR)/$(MODEL_NAME)" --compiled-model-path "$(COMPILED_MODEL_DIR)/$(MODEL_NAME)"
+	$(PYTHON) $(MAIN_SCRIPT) --mode generate --model-path "$(MODELS_DIR)/$(MODEL_NAME)" --compiled-model-path "$(COMPILED_MODEL_DIR)/$(MODEL_NAME)" --enable-nki --seq-len 640 --tp-degree $(TENSOR_PARALLEL_SIZE)
 
 # Run inference in evaluate_single mode
 .PHONY: evaluate
@@ -208,7 +229,7 @@ evaluate: check-neuron-venv check-model-name
 .PHONY: evaluate-all
 evaluate-all: check-neuron-venv check-model-name
 	@echo "Running inference in evaluate_all mode with model: $(MODEL_NAME)"
-	$(PYTHON) $(MAIN_SCRIPT) --mode evaluate_all --enable-nki --seq-len 640
+	$(PYTHON) $(MAIN_SCRIPT) --mode evaluate_all --model-path "$(MODELS_DIR)/$(MODEL_NAME)" --compiled-model-path "$(COMPILED_MODEL_DIR)/$(MODEL_NAME)" --enable-nki --seq-len 640 --tp-degree $(TENSOR_PARALLEL_SIZE)
 
 # Clean generated files
 .PHONY: clean

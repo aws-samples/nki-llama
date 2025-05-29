@@ -46,38 +46,43 @@ This repository contains three main components:
     5. When connecting to these instances via SSH, use the username of *ubuntu*.
 
 2. Clone this repository and navigate to it:
-   ```bash
-   git clone [REPO_URL]
-   cd [PATH]/nki-llama
-   ```
+
+```bash
+git clone [REPO_URL]
+cd [PATH]/nki-llama
+```
 
 3. Create your `.env` file by copying the provided example:
-   ```bash
-   cp .env.example .env
-   # Edit .env file with your preferred settings
-   nano .env
-   ```
+
+```bash
+cp .env.example .env
+# Edit .env file with your preferred settings
+nano .env
+```
 
 ## Environment Setup
 
 This project requires three different Python environments:
 
 1. **Fine-tuning Environment**:
-   ```bash
-   source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
-   ```
+
+```bash
+source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
+```
 
 2. **Inference Environment**:
-   ```bash
-   source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
-   ```
+
+```bash
+source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
+```
 
 3. **Jupyter Environment** (for agent development):
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   make inference-jupyter  # Sets up Jupyter and installs required packages
-   ```
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+make inference-jupyter  # Sets up Jupyter and installs required packages
+```
 
 ## Fine-tuning Workflow
 
@@ -134,17 +139,18 @@ make inference-server
 
 The repository includes a `.env.example` file with template configuration. Copy this file to create your own `.env`:
 
-```
+```bash
+# .env file
 # Model configuration
-MODEL_NAME=llama-3.2-3b-instruct
+## HuggingFace Model ID (https://huggingface.co/meta-llama/Meta-Llama-3-8B)
+MODEL_ID=meta-llama/Meta-Llama-3-8B
+## Short name for model ID
+MODEL_NAME=meta-llama-3-8b
 
-# Compiled model directory for NKI artifacts
-COMPILED_MODEL_DIR=~/traced_model
-
-# Server configuration
+# Server configurations
 PORT=8080
 MAX_MODEL_LEN=2048
-TENSOR_PARALLEL_SIZE=8
+TENSOR_PARALLEL_SIZE=32
 
 HF_TOKEN=your_token_here
 ```
@@ -156,6 +162,16 @@ The Makefile will automatically load this configuration if present, or prompt yo
 The Makefile provides several commands for running inference and evaluation:
 
 ```bash
+# Activate the inference environment
+source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
+
+# Download model from Hugging Face (you'll need a HF token)
+# (skip this step if using your fine-tuned model)
+make inference-download
+
+# Run inference in generate mode
+make inference-infer
+
 # Run in evaluate-all mode
 make inference-evaluate-all
 ```
@@ -175,13 +191,15 @@ The repository includes a Jupyter notebook for developing and testing agents. To
 
 1. Ensure you've started the vLLM server in one terminal: `make inference-server`
 2. Start Jupyter Lab in another terminal:
-   ```bash
-   # Activate the Jupyter environment
-   source venv/bin/activate
-   
-   # Start Jupyter Lab
-   make inference-lab
-   ```
+
+```bash
+# Activate the Jupyter environment
+source venv/bin/activate
+
+# Start Jupyter Lab
+make inference-lab
+```
+
 3. Open the travel planning notebook and select the "neuron_agents" kernel
 
 ## Makefile Commands
@@ -240,13 +258,14 @@ Here's a complete workflow example combining all components:
    ```
 
 3. **Build agents** with the served model:
-   ```bash
-   # In a new terminal
-   source venv/bin/activate
-   make inference-jupyter
-   make inference-lab
-   # Open the Jupyter notebook and connect to your model
-   ```
+
+```bash
+# In a new terminal
+source venv/bin/activate
+make inference-jupyter
+make inference-lab
+# Open the Jupyter notebook and connect to your model
+```
 
 ---
 

@@ -18,15 +18,9 @@ check-neuron-venv:
 	fi
 
 deps: check-neuron-venv
-	@echo "==> Checking for existing dependencies..."
-	if pip show apex >/dev/null 2>&1 && \
-		pip show neuronx_distributed_training >/dev/null 2>&1 && \
-	    pip show torch-neuronx >/dev/null 2>&1; then \
-		echo "All dependencies are already installed."; \
-	else \
-		echo "Installing Apex, NxDT and other dependencies..."; \
-		bash scripts/bootstrap.sh; \
-	fi
+	@echo "==> Installing/Validating Apex, NxDT and other dependencies..."
+	@echo "Running bootstrap script to ensure all dependencies are properly configured..."
+	bash scripts/bootstrap.sh
 
 data: check-neuron-venv
 	@echo "==> Downloading dataset"
@@ -34,7 +28,7 @@ data: check-neuron-venv
 
 model: check-neuron-venv
 	@echo "==> Downloading & converting model"
-	HF_TOKEN="${HF_TOKEN}" bash scripts/download_model.sh
+	HF_TOKEN="${HF_TOKEN}" MODEL_ID="${MODEL_ID}" bash scripts/download_model.sh
 
 convert_ckpt: check-neuron-venv
 	@echo "==> Converting checkpoint to NxDT format"

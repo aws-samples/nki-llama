@@ -7,11 +7,12 @@ echo "==== Changing to fine-tune directory ===="
 cd ~/nki-llama/src/fine-tune/
 
 if [ -d "/home/ubuntu/nki-llama/src/fine-tune/neuronx-distributed-training" ]; then
-    echo "==== NxDT already cloned. Skipping. ===="
-else
-    echo "==== Cloning neuronx-distributed-training repository ===="
-    git clone https://github.com/aws-neuron/neuronx-distributed-training.git
+    echo "==== Removing existing NxDT repository to ensure latest version ===="
+    rm -rf neuronx-distributed-training
 fi
+
+echo "==== Cloning neuronx-distributed-training repository ===="
+git clone https://github.com/aws-neuron/neuronx-distributed-training.git
 
 echo "==== Changing to checkpoint converter scripts directory ===="
 cd ~/nki-llama/src/fine-tune/neuronx-distributed-training/examples/checkpoint_converter_scripts
@@ -43,4 +44,4 @@ python3 checkpoint_converter.py \
     --qkv_linear              True \
     --convert_from_full_state
 
-echo "==== Checkpoint conversion complete! ===="
+echo "==== Checkpoint conversion complete! ====="
