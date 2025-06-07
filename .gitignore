@@ -268,5 +268,6 @@ test/inference/output
 global_metric_store.json
 benchmark_report.json
 cached_requirements.txt
+**/logs/
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,linux,jupyternotebooks,python
