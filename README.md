@@ -1,272 +1,458 @@
-# NKI Llama
+# NKI-LLAMA: AWS Neuron Development Platform
 
-A unified project for fine-tuning, inference, and agent development of Llama models on AWS Trainium and Inferentia.
+A unified platform for fine-tuning, benchmarking, and serving LLaMA models on AWS Trainium and Inferentia using Neuron SDK's advanced optimization capabilities.
 
+## 🎯 Overview
 
-## Project Workflow
+NKI-LLAMA provides a streamlined interface for the complete LLM development lifecycle on AWS Neuron hardware:
+
+- **Fine-tune** models using NeuronX Distributed (NxD)
+- **Optimize** with Neuron Kernel Interface (NKI) compilation
+- **Benchmark** performance with comprehensive evaluation tools
+- **Serve** models with vLLM's OpenAI-compatible API
+- **Build** LLM-powered applications and agents
+
+## 🔄 Architecture
 
 ```
-┌────────────────┐     ┌────────────────┐     ┌────────────────┐
-│                │     │                │     │                │
-│   Fine-tune    │────▶│   Inference    │────▶│     Agent      │
-│                │     │                │     │  Development   │
-│                │     │                │     │                │
-└────────────────┘     └────────────────┘     └────────────────┘
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────┐
+│                 │     │                  │     │                 │     │              │
+│   Fine-tuning   │────▶│ NKI Compilation  │────▶│ vLLM Inference  │────▶│    Agent     │
+│      (NxD)      │     │  & Benchmarking  │     │     (NxDI)      │     │ Development  │
+│                 │     │                  │     │                 │     │              │
+└─────────────────┘     └──────────────────┘     └─────────────────┘     └──────────────┘
+        │                         │                         │                         │
+        ▼                         ▼                         ▼                         ▼
+  Trained Model            NKI-Optimized              API Endpoint              LLM Apps
+                          Model Artifacts            (OpenAI Compatible)
 ```
 
-This project follows a three-stage workflow:
-1. **Fine-tune** a model using Neuron hardware with NxD
-2. **Inference** using the fine-tuned model with vLLM, NKI compilation, and NxDI (Neuron Distributed Inference)
-3. **Agent Development** using LangChain/LangGraph connected to your model
+### Key Technologies
 
-## Technical Infrastructure
+- **NKI (Neuron Kernel Interface)**: Custom kernel optimizations for AWS Neuron
+- **NxD (NeuronX Distributed)**: Distributed training framework
+- **NxDI (NeuronX Distributed Inference)**: Optimized inference runtime
+- **vLLM**: High-performance serving with Neuron backend
 
-### Compute Resources
-- **Required Instance**: trn1.32xlarge 
-- **Base AMI**: Deep Learning AMI Neuron (Ubuntu 22.04) with Neuron SDK 2.23.
-- **Base Packages**:
-  - NxD (NeuronX Distributed Training)
-  - NKI (Neuron Kernel Interface)
-  - NxDI (Neuron Distributed Inference)
+## 📋 Requirements
 
-## Project Structure
+### System Requirements
+- **Instance**: trn1.32xlarge (recommended)
+- **AMI**: Deep Learning AMI Neuron (Ubuntu 22.04)
+- **Neuron SDK**: 2.23.0
+- **Python**: 3.10
 
-This repository contains three main components:
-- **Fine-tuning**: Tools for fine-tuning LLMs on Neuron hardware using NxD
-- **Inference**: Infrastructure for efficient inference using vLLM with NKI compilation and NxDI optimization
-- **Agent Development**: Building intelligent agents with LangChain/LangGraph
+### SDK Components
+- NeuronX Distributed Training: 1.3.0
+- NeuronX Distributed Inference: 0.3.5591
+- Neuron Compiler: 2.18.121.0
 
-## Setup Steps
+## 🚀 Quick Start
 
-1. Create a Trainium instance with AWS Neuron SDK v2.23 using EC2 with the following settings:
-    1. **Name:** nki-llama
-    2. **AMI:** Deep Learning AMI Neuron (Ubuntu 22.04)
-    3. **Instance type:** trn1.32xlarge
-    4. **Key pair (login):** create a new key pair
-    5. When connecting to these instances via SSH, use the username of *ubuntu*.
-
-2. Clone this repository and navigate to it:
-
+### 1. Instance Setup
 ```bash
-git clone [REPO_URL]
-cd [PATH]/nki-llama
+# Create EC2 instance
+# - Type: trn1.32xlarge
+# - AMI: Deep Learning AMI Neuron (Ubuntu 22.04)
+# - Storage: 512GB+ recommended
 ```
 
-3. Create your `.env` file by copying the provided example:
-
+### 2. Installation
 ```bash
+# Clone repository
+git clone https://github.com/aws-neuron/nki-llama.git
+cd nki-llama
+
+# Install
+chmod +x install.sh
+./install.sh
+
+# Configure
 cp .env.example .env
-# Edit .env file with your preferred settings
-nano .env
+nano .env  # Add your HF_TOKEN
+# inference env vars, ensure max_model_len= seq_len
 ```
 
-## Environment Setup
-
-This project requires three different Python environments:
-
-1. **Fine-tuning Environment**:
-
+### 3. First Run
 ```bash
-source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
-```
-
-2. **Inference Environment**:
-
-```bash
-source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
-```
-
-3. **Jupyter Environment** (for agent development):
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-make inference-jupyter  # Sets up Jupyter and installs required packages
-```
-
-## Fine-tuning Workflow
-
-Our Makefile simplifies the fine-tuning process:
-
-```bash
-# Activate the fine-tuning environment
-source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
-
-# Install dependencies
-make finetune-deps
-
-# Download dataset
-make finetune-data
+# Interactive setup
+./nki-llama setup
 
 # Download model
-make finetune-model
-
-# Convert checkpoint to NxDT format
-make finetune-convert
-
-# Pre-compile graphs (AOT)
-make finetune-precompile
-
-# Run fine-tuning job
-make finetune-train
-```
-
-## Inference Workflow
-
-The inference pipeline includes NKI (Neuron Kernel Interface) compilation and NxDI (Neuron Distributed Inference) integration with vLLM for optimal performance on Neuron hardware.
-
-Use our Makefile to simplify the setup and execution process for inference:
-
-```bash
-# Activate the inference environment
 source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
+./nki-llama inference download
 
-# Setup vLLM for Neuron
-make inference-setup
-
-# Download model from Hugging Face (you'll need a HF token)
-# (skip this step if using your fine-tuned model)
-make inference-download
-
-# The model will be automatically compiled with NKI and optimized for NxDI
-# when the server starts for the first time
-
-# Start the vLLM OpenAI-compatible API server with NxDI
-make inference-server
+# Run benchmark (compiles model on first run)
+tmux new -s benchmark
+./nki-llama inference benchmark
 ```
 
-### Environment Configuration
+## 📊 Score Calculation Workflow
 
-The repository includes a `.env.example` file with template configuration. Copy this file to create your own `.env`:
+The NKI-LLAMA platform includes a comprehensive score calculation system that evaluates both training and inference performance. For detailed information about the scoring system, see the [Score Calculation README](src/README.md).
+
+### Workflow Overview
+
+1. **Pre-compile Phase**: 
+   - Execute the pre-compile job using `./nki-llama finetune compile`
+   - This generates a compile directory in the neuron cache
+   - The pre-compile job creates a log file in `logs/nki-llama_*.log`
+   - **Important**: Note the compile directory path from the "Pre-compile graphs" log output
+   - Example: `/home/ubuntu/neuron_cache/neuronxcc-2.18.121.0+9e31e41a/MODULE_15329989265349737271+a65e371e`
+
+2. **Training Execution**:
+   - Execute the pre-compile job using `./nki-llama finetune train`
+   - The training job creates a log file in `logs/nki-llama_*.log`
+   - This log contains metrics like latency, throughput, and MFU
+   - The benchmark inference file is always generated at: `benchmark_inference.json`
+
+3. **Score Collection**:
+   - Once training completes, scores can be calculated using the handler
+   - If only training is done, you'll get the NKI kernel training score
+   - If both training and inference are complete, you'll get the full NKI-LLAMA score
+
+### Example Test Run
 
 ```bash
-# .env file
-# Model configuration
-## HuggingFace Model ID (https://huggingface.co/meta-llama/Meta-Llama-3-8B)
-MODEL_ID=meta-llama/Meta-Llama-3-8B
-## Short name for model ID
-MODEL_NAME=meta-llama-3-8b
+# Step 1: Run full fine-tuning job and note the compile directory
+tmux new -s training
+source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
+./nki-llama finetune all
+# Look for "Pre-compile graphs" in output to find compile directory path
 
-# Server configurations
-PORT=8080
-MAX_MODEL_LEN=2048
-TENSOR_PARALLEL_SIZE=32
-
-HF_TOKEN=your_token_here
-```
-
-The Makefile will automatically load this configuration if present, or prompt you for values if not set.
-
-### Running Inference
-
-The Makefile provides several commands for running inference and evaluation:
-
-```bash
-# Activate the inference environment
+# Step 2: Run inference benchmark (optional for full score)
+tmux new -s benchmark
 source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
+./nki-llama inference benchmark 
+# or directly run from main.py in src/inference/ for full use of flags for bucketing/context encoding and others
 
-# Download model from Hugging Face (you'll need a HF token)
-# (skip this step if using your fine-tuned model)
-make inference-download
+# Step 3: Calculate scores
+# For training-only score:
+python /home/ubuntu/nki-llama/src/handler.py \
+    --config /home/ubuntu/nki-llama/src/fine-tune/neuronx-distributed-training/examples/conf/hf_llama3_8B_SFT_config.yaml \
+    --model-config /home/ubuntu/nki-llama/src/fine-tune/configs/model-config/8B_config_llama3-1/config.json \
+    --log-file /home/ubuntu/nki-llama/logs/nki-llama_20250610_014432.log \
+    --compile-dir /home/ubuntu/neuron_cache/neuronxcc-2.18.121.0+9e31e41a/MODULE_15329989265349737271+a65e371e \
+    --throughput 2.1 \
+    --output benchmark_results.json \
+    --training-weight 0.5 \
+    --inference-weight 0.5 \
+    --hw-backend trn1 \
+    --per-file-scores \
+    --calculate-score \
+    --detailed \
+    --verbose
 
-# Run inference in generate mode
-make inference-infer
-
-# Run in evaluate-all mode
-make inference-evaluate-all
+# For full score (with inference):
+python /home/ubuntu/nki-llama/src/handler.py \
+    --config /home/ubuntu/nki-llama/src/fine-tune/neuronx-distributed-training/examples/conf/hf_llama3_8B_SFT_config.yaml \
+    --model-config /home/ubuntu/nki-llama/src/fine-tune/configs/model-config/8B_config_llama3-1/config.json \
+    --log-file /home/ubuntu/nki-llama/logs/nki-llama_20250610_014432.log \
+    --compile-dir /home/ubuntu/neuron_cache/neuronxcc-2.18.121.0+9e31e41a/MODULE_15329989265349737271+a65e371e \
+    --inference-results /home/ubuntu/nki-llama/src/inference/benchmark_inference.json \
+    --throughput 2.1 \
+    --output benchmark_results.json \
+    --training-weight 0.5 \
+    --inference-weight 0.5 \
+    --hw-backend trn1 \
+    --per-file-scores \
+    --calculate-score \
+    --detailed \
+    --verbose
 ```
 
-## Agent Development
+The score calculation provides insights into:
+- **Training Performance**: MFU improvement and throughput gains
+- **Inference Performance**: Latency reduction and throughput increase
+- **NKI Optimization**: Ratio of NKI-optimized operations
 
-This repository includes support for building LLM-powered agents using LangGraph and LangChain. A sample travel planning agent is included that demonstrates how to build a stateful agent workflow with the following capabilities:
+## 💻 Command Reference
 
-- Context-aware travel itinerary generation
-- Multi-turn conversation with memory
-- Dynamic workflow management using LangGraph
-- Integration with VLLMOpenAI for efficient inference on Trainium
-
-### Jupyter Notebook
-
-The repository includes a Jupyter notebook for developing and testing agents. To use it:
-
-1. Ensure you've started the vLLM server in one terminal: `make inference-server`
-2. Start Jupyter Lab in another terminal:
-
-```bash
-# Activate the Jupyter environment
-source venv/bin/activate
-
-# Start Jupyter Lab
-make inference-lab
-```
-
-3. Open the travel planning notebook and select the "neuron_agents" kernel
-
-## Makefile Commands
+### Core Commands
 
 | Command | Description |
 |---------|-------------|
-| **General** |
-| `make help` | Show help message for all commands |
-| `make clean` | Clean all generated files |
-| **Fine-tuning** |
-| `make finetune` | Run all fine-tuning steps |
-| `make finetune-deps` | Install fine-tuning dependencies |
-| `make finetune-data` | Download datasets for fine-tuning |
-| `make finetune-model` | Download model for fine-tuning |
-| `make finetune-convert` | Convert checkpoint to NxDT format |
-| `make finetune-precompile` | Pre-compile graphs (AOT) |
-| `make finetune-train` | Run fine-tuning job |
-| `make finetune-clean` | Clean up fine-tuning files |
-| **Inference** |
-| `make inference` | Run inference (shortcut to inference-infer) |
-| `make inference-setup` | Setup vLLM for Neuron |
-| `make inference-jupyter` | Setup Jupyter environment |
-| `make inference-download` | Download model from Hugging Face |
-| `make inference-infer` | Run inference in generate mode (wip) |
-| `make inference-evaluate` | Run inference in evaluate mode |
-| `make inference-server` | Start vLLM OpenAI-compatible API server |
-| `make inference-lab` | Run Jupyter Lab server |
-| `make inference-clean` | Clean up inference files |
+| `./nki-llama setup` | Interactive setup wizard |
+| `./nki-llama status` | System and project status |
+| `./nki-llama config` | Display configuration |
+| `./nki-llama clean` | Clean artifacts and cache |
 
-## Environment Requirements
-
-- For fine-tuning: `source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate`
-- For inference: `source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate`
-- For agent development (Jupyter): `source venv/bin/activate`
-
-## Full Workflow Example
-
-Here's a complete workflow example combining all components:
-
-1. **Fine-tune a model**:
-   ```bash
-   source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
-   make finetune
-   ```
-
-2. **Serve the model** for inference:
-   ```bash
-   source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
-   make inference-setup
-   # You can either use your fine-tuned model or download one
-   # make inference-download
-   
-   # The model will be compiled with NKI and optimized for NxDI
-   # when you first start the server (this may take a few minutes)
-   make inference-server
-   ```
-
-3. **Build agents** with the served model:
+### Fine-tuning Pipeline
 
 ```bash
-# In a new terminal
-source venv/bin/activate
-make inference-jupyter
-make inference-lab
-# Open the Jupyter notebook and connect to your model
+# Activate environment
+source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
+
+# Complete pipeline
+./nki-llama finetune all
+
+# Or run individual steps
+./nki-llama finetune deps      # Install dependencies
+./nki-llama finetune data      # Download dataset
+./nki-llama finetune model     # Download base model
+./nki-llama finetune convert   # Convert to NxDT format
+./nki-llama finetune compile   # Pre-compile graphs
+./nki-llama finetune train     # Start training
 ```
 
----
+### Benchmarking & Compilation
+
+```bash
+# Activate environment
+source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
+
+# Download model (if not already done)
+./nki-llama inference download
+
+# Full benchmark with NKI compilation (default)
+./nki-llama inference benchmark
+
+# Benchmark with options
+./nki-llama inference benchmark --seq-len 1024
+./nki-llama inference benchmark --clear-cache  # Clear compilation cache
+./nki-llama inference benchmark --no-nki       # Without NKI optimizations
+```
+
+#### Benchmark Modes
+
+| Mode | Description | Status |
+|------|-------------|--------|
+| `evaluate_all` | Full benchmark with NKI compilation and caching | ✅ Working |
+| `evaluate_single` | Quick validation test | ⚠️ Not implemented |
+
+> **Note**: The `evaluate_single` mode is currently not functional. Use `evaluate_all` (default) for all benchmarking needs.
+
+### Inference Serving
+
+```bash
+# Setup vLLM (one-time)
+./nki-llama inference setup
+
+# Start API server
+tmux new -s vllm
+./nki-llama inference server
+
+# Server will use NKI-compiled artifacts from benchmarking
+```
+
+### Development Tools
+
+```bash
+# Start Jupyter Lab
+./nki-llama jupyter
+
+# Access at http://your-instance-ip:8888
+```
+
+## 🛠️ Advanced Usage
+
+### Cache Management
+
+The compilation cache can accumulate failed entries. Monitor and manage it:
+
+```bash
+# Check cache status
+./nki-llama status
+
+# Clear cache before benchmark
+./nki-llama inference benchmark --clear-cache
+
+# Manual cache cleanup
+./nki-llama clean
+```
+
+### Using tmux (Recommended)
+
+Long-running operations should use tmux to prevent disconnection issues:
+
+```bash
+# Create session
+tmux new -s session-name
+
+# Run command
+./nki-llama [command]
+
+# Detach: Ctrl+B, then D
+
+# List sessions
+tmux ls
+
+# Reattach
+tmux attach -t session-name
+```
+
+### Environment Management
+
+Different operations require specific environments:
+
+```bash
+# Fine-tuning
+source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
+
+# Inference & Benchmarking
+source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
+
+# Agent Development
+source ~/nki-llama/venv/bin/activate
+```
+
+## 📊 Monitoring & Debugging
+
+### System Monitoring
+```bash
+# Neuron device status
+neuron-ls
+
+# Real-time usage
+neuron-top
+
+# Project status
+./nki-llama status
+```
+
+### Log Files
+```bash
+# View recent logs
+ls -la logs/
+tail -f logs/nki-llama_*.log
+
+# Benchmark results
+cat logs/benchmarks/*/metadata.json
+```
+
+### Common Issues
+
+#### Compilation Cache Errors
+```bash
+# Symptoms: "Got a cached failed neff" errors
+# Solution:
+./nki-llama inference benchmark --clear-cache
+```
+
+#### SIGHUP Errors
+```bash
+# Symptoms: Process terminated during compilation
+# Solution: Always use tmux for long operations
+tmux new -s benchmark
+```
+
+#### Memory Issues
+```bash
+# Monitor memory usage
+neuron-top
+
+# Adjust parallelism if needed
+export TENSOR_PARALLEL_SIZE=4  # Reduce from 8
+```
+
+## 🏗️ Project Structure
+
+```
+nki-llama/
+├── nki-llama.sh          # Main CLI interface
+├── nki-llama.config      # System configuration
+├── .env                  # User configuration
+├── install.sh            # Installation script
+├── README.md             # This file
+├── src/
+│   ├── README.md         # Score calculation documentation
+│   ├── handler.py        # Score calculation handler
+│   ├── fine-tune/        # Training pipeline
+│   │   └── scripts/      # Training automation
+│   └── inference/        # Inference pipeline
+│       ├── main.py       # Benchmark entry point
+│       └── scripts/      # Inference automation
+├── notebooks/            # Example notebooks
+│   └── neuron_agents.ipynb
+├── logs/                 # Operation logs
+│   └── benchmarks/       # Benchmark results
+└── models/              # Downloaded models
+    └── compiled/        # NKI-compiled artifacts
+```
+
+## 🔧 Configuration
+
+### Environment Variables (.env)
+
+```bash
+# Hugging Face Access
+HF_TOKEN=your_token_here
+
+# Model Selection
+MODEL_ID=meta-llama/Meta-Llama-3-8B
+MODEL_NAME=llama-3-8b
+
+# Hardware Configuration
+TENSOR_PARALLEL_SIZE=8
+NEURON_RT_NUM_CORES=8
+
+# Inference Parameters
+INFERENCE_PORT=8080
+MAX_MODEL_LEN=2048
+```
+
+## 🎓 Complete Workflow Example
+
+### Step 1: Fine-tune a Model
+```bash
+tmux new -s training
+source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
+./nki-llama finetune all
+# Note the compile directory from "Pre-compile graphs" output
+# Detach: Ctrl+B, D
+```
+
+### Step 2: Benchmark & Compile
+```bash
+tmux new -s benchmark
+source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
+./nki-llama inference download
+./nki-llama inference benchmark
+# First run compiles with NKI (10-30 minutes)
+# Detach: Ctrl+B, D
+```
+
+### Step 3: Calculate Performance Score
+```bash
+# After training and/or inference completes
+python /home/ubuntu/nki-llama/src/handler.py \
+    --compile-dir /path/from/training/logs \
+    --log-file logs/nki-llama_latest.log \
+    --inference-results benchmark_inference.json \
+    --calculate-score
+```
+
+### Step 4: Serve Model
+```bash
+tmux new -s vllm-server
+source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
+./nki-llama inference server
+# API available at http://localhost:8080
+# Detach: Ctrl+B, D
+```
+
+### Step 5: Build Applications
+```bash
+# Terminal 1: Keep server running
+# Terminal 2: Development
+./nki-llama jupyter
+# Open browser to http://your-ip:8888
+```
+
+## 📚 Additional Resources
+
+- [AWS Neuron Documentation](https://awsdocs-neuron.readthedocs-hosted.com/)
+- [NeuronX Distributed Training Guide](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/libraries/neuronx-distributed/index.html)
+- [NKI Documentation](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/general/nki/index.html)
+- [vLLM Neuron Integration](https://docs.vllm.ai/en/latest/getting_started/neuron-installation.html)
+
+## 🐛 Known Issues
+
+- **First compilation**: Initial NKI compilation can take 10-30 minutes. Subsequent runs use cache.
+- **Cache corruption**: If benchmark fails with cache errors, use `--clear-cache` flag.
+
+## 📄 License
 
 © 2025 Amazon Web Services. All rights reserved.
+
+This project is provided under the AWS Customer Agreement and integrates with AWS Neuron SDK components subject to their respective licenses.
