@@ -4,6 +4,7 @@ This guide walks you through setting up and running reasoning benchmarks on your
 
 ## Prerequisites
 
+- Ensure you have run `./nki-llama inference setup` first
 - Ubuntu environment with AWS Neuron SDK installed
 - Git configured with your credentials
 - Python virtual environment set up
