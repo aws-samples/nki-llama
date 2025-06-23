@@ -4,11 +4,9 @@ This guide walks you through setting up and running reasoning benchmarks on your
 
 ## Prerequisites
 
+- Ensure you are in the pytorch_2_6 nxdi venv
 - Ensure you have run `./nki-llama inference setup` first
-- Ubuntu environment with AWS Neuron SDK installed
-- Git configured with your credentials
-- Python virtual environment set up
-- tmux for session management
+- tmux for session management - start a new session eg: `tmux new -s bench`
 
 ## Step 1: Clone the Repository
 
