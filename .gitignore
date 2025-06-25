@@ -272,5 +272,8 @@ cached_requirements.txt
 benchmark_finetuning.json
 benchmark_results.json
 **/logs/
+compiled_merged_model/
+compiled_model/
+merged_model/
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,linux,jupyternotebooks,python
