@@ -46,7 +46,7 @@ def calculate_training_score(
     
     # Combine metrics into final score
     # Similar formula to inference but adapted for training metrics
-    final_score = mfu_improvement * throughput_improvement * loss_improvement * convergence_rate * (1 + nki_flop_ratio)
+    final_score = mfu_improvement * throughput_improvement * loss_improvement * convergence_rate * (0.1 + nki_flop_ratio)
     
     return {
         'score': final_score,
