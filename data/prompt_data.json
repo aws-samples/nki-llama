@@ -1,0 +1,39 @@
+{
+  "prompt_performance_data": [
+    {
+      "index": 0,
+      "word_count": 18,
+      "sequence_length": 64,
+      "baseline_latency_ms": 6259.94,
+      "baseline_throughput": 104.77
+    },
+    {
+      "index": 1,
+      "word_count": 126,
+      "sequence_length": 256,
+      "baseline_latency_ms": 5145.66,
+      "baseline_throughput": 138.21
+    },
+    {
+      "index": 2,
+      "word_count": 43,
+      "sequence_length": 128,
+      "baseline_latency_ms": 6045.47,
+      "baseline_throughput": 110.45
+    },
+    {
+      "index": 3,
+      "word_count": 10,
+      "sequence_length": 64,
+      "baseline_latency_ms": 6772.14,
+      "baseline_throughput": 100.55
+    },
+    {
+      "index": 4,
+      "word_count": 402,
+      "sequence_length": 640,
+      "baseline_latency_ms": 1565.42,
+      "baseline_throughput": 468.28
+    }
+  ]
+}
