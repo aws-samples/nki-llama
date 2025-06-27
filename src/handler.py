@@ -10,9 +10,11 @@ import subprocess
 import sys
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 import logging
 from datetime import datetime
+import glob
+import re
 
 
 class NKILlamaHandler:
@@ -183,17 +185,48 @@ class NKILlamaHandler:
         
         return score, breakdown
         
+    def calculate_reasoning_score(self, reasoning_metrics: Dict[str, Any]) -> float:
+        """
+        Calculate reasoning score from reasoning evaluation results.
+        
+        The reasoning score is based on the overall accuracy across reasoning tasks,
+        normalized to a 0-1 scale and then scaled to match the scoring range of other components.
+        
+        Args:
+            reasoning_metrics: Dictionary containing reasoning evaluation results
+            
+        Returns:
+            Float representing the reasoning score
+        """
+        try:
+            # Get the overall score (already averaged across tasks)
+            overall_score = reasoning_metrics.get("overall_score", 0.0)
+            
+            # The overall_score is already in 0-1 range (accuracy percentage)
+            # Scale it to match the typical range of other components (0-10 range)
+            reasoning_score = overall_score * 10.0
+            
+            self.logger.debug(f"Reasoning score calculation: {overall_score:.4f} -> {reasoning_score:.4f}")
+            
+            return reasoning_score
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating reasoning score: {e}")
+            return 0.0
+        
     def calculate_combined_score(self, training_metrics: Dict[str, Any],
                                  inference_metrics: Optional[Dict[str, Any]] = None,
+                                 reasoning_metrics: Optional[Dict[str, Any]] = None,
                                  weights: Optional[Dict[str, float]] = None,
                                  reference_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Calculate combined NKI-LLAMA score from training and inference metrics.
-        If inference metrics are not available, returns training-only score.
+        Calculate combined NKI-LLAMA score from training, inference, and reasoning metrics.
+        Handles graceful fallback when components are not available.
         
         Args:
             training_metrics: Training metrics including NKI analysis
             inference_metrics: Optional inference benchmark results
+            reasoning_metrics: Optional reasoning evaluation results
             weights: Optional weights for combining scores
             reference_data: Optional reference implementation data for inference scoring
             
@@ -201,58 +234,104 @@ class NKILlamaHandler:
             Dictionary containing combined score and breakdown
         """
         if weights is None:
-            weights = {
-                "training": 0.4,
-                "inference": 0.6
-            }
+            # Default weights based on available components
+            if inference_metrics is not None and reasoning_metrics is not None:
+                weights = {
+                    "training": 0.3,
+                    "inference": 0.4,
+                    "reasoning": 0.3
+                }
+            elif inference_metrics is not None:
+                weights = {
+                    "training": 0.4,
+                    "inference": 0.6,
+                    "reasoning": 0.0
+                }
+            elif reasoning_metrics is not None:
+                weights = {
+                    "training": 0.7,
+                    "inference": 0.0,
+                    "reasoning": 0.3
+                }
+            else:
+                weights = {
+                    "training": 1.0,
+                    "inference": 0.0,
+                    "reasoning": 0.0
+                }
             
         # Get training score and NKI ratio
         training_score = training_metrics.get("training_score", 0.0)
         nki_ratio = training_metrics["nki_analysis"]["summary"]["overall_nki_ratio"]
         
-        # Check if inference metrics are available
-        if inference_metrics is None:
-            # Training-only mode
+        # Calculate reasoning score if available
+        reasoning_score = None
+        if reasoning_metrics is not None:
+            reasoning_score = self.calculate_reasoning_score(reasoning_metrics)
+        
+        # Determine execution mode based on available components
+        available_components = []
+        if training_metrics is not None:
+            available_components.append("training")
+        if inference_metrics is not None:
+            available_components.append("inference")
+        if reasoning_metrics is not None:
+            available_components.append("reasoning")
+            
+        mode = "_".join(available_components) if len(available_components) > 1 else f"{available_components[0]}_only"
+        
+        # Handle training-only mode
+        if inference_metrics is None and reasoning_metrics is None:
             return {
                 "combined_score": training_score,
                 "training_score": training_score,
                 "inference_score": None,
+                "reasoning_score": None,
                 "weights": weights,
                 "mode": "training_only",
                 "breakdown": {
                     "training": training_metrics.get("training_score_breakdown", {}),
-                    "inference": None
+                    "inference": None,
+                    "reasoning": None
                 },
                 "nki_ratio": nki_ratio
             }
         
-        # Calculate inference score with NKI ratio
-        inference_score, inference_breakdown = self.calculate_inference_score(inference_metrics, reference_data)
+        # Calculate inference score with NKI ratio if available
+        inference_score_with_nki = None
+        inference_breakdown = None
+        if inference_metrics is not None:
+            inference_score, inference_breakdown = self.calculate_inference_score(inference_metrics, reference_data)
+            
+            # Update inference score with actual NKI FLOPS ratio
+            inference_breakdown["normalized_nki_flops"] = nki_ratio
+            inference_score_with_nki = (
+                inference_breakdown["accuracy"] * 
+                inference_breakdown["reduced_latency"] * 
+                inference_breakdown["increased_throughput"] * 
+                (1 + nki_ratio)
+            )
         
-        # Update inference score with actual NKI FLOPS ratio
-        inference_breakdown["normalized_nki_flops"] = nki_ratio
-        inference_score_with_nki = (
-            inference_breakdown["accuracy"] * 
-            inference_breakdown["reduced_latency"] * 
-            inference_breakdown["increased_throughput"] * 
-            (1 + nki_ratio)
-        )
-        
-        # Calculate weighted average
-        combined_score = (
-            weights["training"] * training_score + 
-            weights["inference"] * inference_score_with_nki
-        )
+        # Calculate weighted average based on available components
+        combined_score = 0.0
+        if weights["training"] > 0:
+            combined_score += weights["training"] * training_score
+        if weights["inference"] > 0 and inference_score_with_nki is not None:
+            combined_score += weights["inference"] * inference_score_with_nki
+        if weights["reasoning"] > 0 and reasoning_score is not None:
+            combined_score += weights["reasoning"] * reasoning_score
         
         return {
             "combined_score": combined_score,
             "training_score": training_score,
             "inference_score": inference_score_with_nki,
+            "reasoning_score": reasoning_score,
             "weights": weights,
-            "mode": "combined",
+            "mode": mode,
             "breakdown": {
                 "training": training_metrics.get("training_score_breakdown", {}),
-                "inference": inference_breakdown
+                "inference": inference_breakdown,
+                "reasoning": reasoning_metrics.get("tasks", {}) if reasoning_metrics else None
             },
             "nki_ratio": nki_ratio
         }
@@ -263,9 +342,11 @@ class NKILlamaHandler:
         print("NKI-LLAMA BENCHMARK RESULTS")
         print("="*70)
         
+        mode = results.get("mode", "unknown")
+        
         # Check mode and display appropriate results
-        if results.get("mode") == "training_only":
-            print("\n⚠️  TRAINING-ONLY MODE (Inference results not available)")
+        if mode == "training_only":
+            print("\n⚠️  TRAINING-ONLY MODE (Inference and reasoning results not available)")
             print(f"\n🏆 NKI KERNEL TRAINING SCORE: {results['training_score']:.4f}")
             print(f"   NKI Ratio: {results['nki_ratio']:.4f}")
             
@@ -279,20 +360,29 @@ class NKILlamaHandler:
                 print(f"  Throughput Improvement: {tb.get('throughput_improvement', 0):.4f}x")
                 
             print("\n💡 Note: This score represents training performance only.")
-            print("   To get the full NKI-LLAMA score, run inference benchmarks and provide")
-            print("   the results file using --inference-results option.")
+            print("   To get the full NKI-LLAMA score, run inference benchmarks and reasoning")
+            print("   evaluation, then provide the results using --inference-results and --reasoning-results options.")
             
         else:
-            # Combined mode - full results
+            # Multi-component mode - display based on available components
             print(f"\n🏆 FINAL NKI-LLAMA SCORE: {results['combined_score']:.4f}")
+            print(f"\nExecution Mode: {mode.replace('_', ' + ').title()}")
+            
             print(f"\nScore Weights:")
-            print(f"  Training: {results['weights']['training']*100:.0f}%")
-            print(f"  Inference: {results['weights']['inference']*100:.0f}%")
+            if results['weights']['training'] > 0:
+                print(f"  Training: {results['weights']['training']*100:.0f}%")
+            if results['weights']['inference'] > 0:
+                print(f"  Inference: {results['weights']['inference']*100:.0f}%")
+            if results['weights']['reasoning'] > 0:
+                print(f"  Reasoning: {results['weights']['reasoning']*100:.0f}%")
             
             # Component scores
             print(f"\n📊 Component Scores:")
             print(f"  Training Score: {results['training_score']:.4f}")
-            print(f"  Inference Score: {results['inference_score']:.4f}")
+            if results['inference_score'] is not None:
+                print(f"  Inference Score: {results['inference_score']:.4f}")
+            if results['reasoning_score'] is not None:
+                print(f"  Reasoning Score: {results['reasoning_score']:.4f}")
             print(f"  NKI Ratio: {results['nki_ratio']:.4f}")
             
             # Training breakdown
@@ -335,7 +425,160 @@ class NKILlamaHandler:
             json.dump(output_data, f, indent=2)
             
         self.logger.info(f"Results saved to: {output_file}")
-
+        
+    def discover_reasoning_results(self, model_path: str, 
+                                   results_base_path: str = "/home/ubuntu/aws-neuron-samples/inference-benchmarking/results") -> Optional[Dict[str, Any]]:
+        """
+        Discover reasoning results based on model ID in aws-neuron-samples/inference-benchmarking/results/.
+        
+        Args:
+            model_path: Path to the model (e.g., "/home/ubuntu/models/llama-3-1-8b")
+            results_base_path: Base path to reasoning results directory
+            
+        Returns:
+            Dictionary containing reasoning results or None if not found
+        """
+        try:
+            # Extract model name from path and create sanitized version
+            model_name = os.path.basename(model_path.rstrip('/'))
+            sanitized_model_path = model_path.replace('/', '__')
+            
+            self.logger.info(f"Searching for reasoning results for model: {model_name}")
+            self.logger.debug(f"Sanitized model path: {sanitized_model_path}")
+            
+            # Search in accuracy results directory
+            accuracy_base = os.path.join(results_base_path, "accuracy")
+            
+            if not os.path.exists(accuracy_base):
+                self.logger.warning(f"Accuracy results directory not found: {accuracy_base}")
+                return None
+                
+            # Find all result files matching the model path pattern
+            search_pattern = os.path.join(accuracy_base, "**", sanitized_model_path, "results_*.json")
+            result_files = glob.glob(search_pattern, recursive=True)
+            
+            if not result_files:
+                self.logger.info(f"No reasoning result files found for model {model_name}")
+                self.logger.debug(f"Search pattern used: {search_pattern}")
+                return None
+                
+            # Use the most recent result file (based on timestamp in filename)
+            latest_file = max(result_files, key=lambda f: os.path.getmtime(f))
+            self.logger.info(f"Found reasoning results: {latest_file}")
+            
+            # Load and parse the result file
+            with open(latest_file, 'r') as f:
+                reasoning_data = json.load(f)
+                
+            return self.parse_reasoning_results(reasoning_data, latest_file)
+            
+        except Exception as e:
+            self.logger.error(f"Error discovering reasoning results: {e}")
+            return None
+            
+    def parse_reasoning_results(self, reasoning_data: Dict[str, Any], file_path: str) -> Dict[str, Any]:
+        """
+        Parse JSON result files to extract "exact_match,strict-match" scores.
+        
+        Args:
+            reasoning_data: Raw reasoning results data
+            file_path: Path to the result file for metadata
+            
+        Returns:
+            Dictionary containing parsed reasoning scores
+        """
+        try:
+            parsed_results = {
+                "source_file": file_path,
+                "model_name": reasoning_data.get("model_name", "unknown"),
+                "model_name_sanitized": reasoning_data.get("model_name_sanitized", "unknown"),
+                "evaluation_time": reasoning_data.get("total_evaluation_time_seconds", 0),
+                "tasks": {},
+                "overall_score": 0.0,
+                "task_count": 0
+            }
+            
+            # Extract scores from each task
+            results_section = reasoning_data.get("results", {})
+            total_score = 0.0
+            task_count = 0
+            
+            for task_name, task_results in results_section.items():
+                # Look for exact_match,strict-match score
+                strict_match_score = task_results.get("exact_match,strict-match")
+                flexible_extract_score = task_results.get("exact_match,flexible-extract")
+                
+                if strict_match_score is not None:
+                    parsed_results["tasks"][task_name] = {
+                        "exact_match_strict": strict_match_score,
+                        "exact_match_flexible": flexible_extract_score,
+                        "primary_score": strict_match_score  # Use strict-match as primary
+                    }
+                    total_score += strict_match_score
+                    task_count += 1
+                    
+                    self.logger.debug(f"Task {task_name}: strict-match={strict_match_score}, flexible-extract={flexible_extract_score}")
+                    
+            # Calculate overall average score
+            if task_count > 0:
+                parsed_results["overall_score"] = total_score / task_count
+                parsed_results["task_count"] = task_count
+                
+            self.logger.info(f"Parsed reasoning results: {task_count} tasks, overall score: {parsed_results['overall_score']:.4f}")
+            return parsed_results
+            
+        except Exception as e:
+            self.logger.error(f"Error parsing reasoning results: {e}")
+            return {
+                "source_file": file_path,
+                "error": str(e),
+                "overall_score": 0.0,
+                "task_count": 0,
+                "tasks": {}
+            }
+            
+    def map_model_config_to_path(self, model_config_path: str) -> str:
+        """
+        Map model configuration to corresponding model path for reasoning result discovery.
+        
+        Args:
+            model_config_path: Path to model configuration file
+            
+        Returns:
+            Inferred model path for reasoning result lookup
+        """
+        try:
+            # Try to extract model information from config file
+            if os.path.exists(model_config_path):
+                with open(model_config_path, 'r') as f:
+                    config_data = json.load(f)
+                    
+                # Look for model path hints in config
+                model_name_or_path = config_data.get("model_name_or_path", "")
+                if model_name_or_path and os.path.exists(model_name_or_path):
+                    return model_name_or_path
+                    
+            # Fallback: infer from config path structure
+            # e.g., /path/to/8B_config_llama3-1/config.json -> llama-3-1-8b
+            config_dir = os.path.dirname(model_config_path)
+            config_dir_name = os.path.basename(config_dir)
+            
+            # Map common config directory patterns to model names
+            model_mapping = {
+                "8B_config_llama3-1": "/home/ubuntu/models/llama-3-1-8b",
+                "8B_config_llama3": "/home/ubuntu/models/llama-3-8b-distill",
+                # Add more mappings as needed
+            }
+            
+            if config_dir_name in model_mapping:
+                return model_mapping[config_dir_name]
+                
+            # Final fallback: assume standard model path
+            return "/home/ubuntu/models/llama-3-1-8b"
+            
+        except Exception as e:
+            self.logger.warning(f"Error mapping model config to path: {e}")
+            return "/home/ubuntu/models/llama-3-1-8b"
 
 def main():
     parser = argparse.ArgumentParser(
