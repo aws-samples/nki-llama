@@ -7,7 +7,6 @@ import json
 import os
 import time
 import torch
-import re
 
 from torch_neuronx.pyhlo.hlo_pb2 import HloModuleProto
 from torch_neuronx.testing.validation import logit_validation
@@ -28,7 +27,7 @@ from neuronx_distributed_inference.models.llama import modeling_llama as baselin
 from llama import NeuronLlamaForCausalLM
 from test import *
 
-BENCHMARK_REPORT_FILENAME = "benchmark_report.json"
+BENCHMARK_REPORT_FILENAME = "benchmark_inference.json"
 set_random_seed(0)
 
 
@@ -104,21 +103,34 @@ def parse_args():
 
     return parser.parse_args()
 
-def parse_prompts(filepath):
-    with open(filepath, 'r') as file:
-        arr = file.read().split('\n\n')
-    arr = [prompt.strip() for prompt in arr if prompt.strip()]
-    return arr
-
-
 def parse_prompt_data(filepath):
+    """Parse prompt performance data from JSON file"""
     with open(filepath, 'r') as file:
-        content = file.read()
+        data = json.load(file)
+    
+    # Convert the JSON data to the expected format (list of lists)
+    # Each inner list contains: [index, word_count, sequence_length, baseline_latency_ms, baseline_throughput]
+    prompt_data = []
+    for item in data['prompt_performance_data']:
+        prompt_data.append([
+            str(item['index']),
+            str(item['word_count']),
+            str(item['sequence_length']),
+            str(item['baseline_latency_ms']),
+            str(item['baseline_throughput'])
+        ])
+    
+    return prompt_data
 
-    blocks = content.split('\n')
-    if blocks[-1] == '':
-        blocks = blocks[0:-1]
-    return [block.split(',') for block in blocks]
+
+def parse_prompts(filepath):
+    """Parse prompts from JSON file"""
+    with open(filepath, 'r') as file:
+        data = json.load(file)
+    
+    # Extract just the prompt text from each prompt object
+    prompts = [prompt_obj['prompt'] for prompt_obj in data['prompts']]
+    return prompts
 
 def validate_file_exists(path):
     if not os.path.exists(path) or not os.path.isfile(path):
@@ -283,7 +295,7 @@ def benchmark_sampling(model, tokenizer, generation_config, prompts):
     print("Benchmark completed and its result is as following")
     print(json.dumps(report, indent=4))
     with open(BENCHMARK_REPORT_FILENAME, "w") as f:
-        json.dump(report, f)
+        json.dump(report, f, indent=4)
     print("Completed saving result to " + BENCHMARK_REPORT_FILENAME)
 
     return report
@@ -614,8 +626,8 @@ def main():
         
     elif args.mode == "evaluate_all":
 
-        prompts = parse_prompts("../../data/prompts.txt")
-        prompt_data = parse_prompt_data("../../data/prompt_data.txt")
+        prompts = parse_prompts("../../data/prompts.json")
+        prompt_data = parse_prompt_data("../../data/prompt_data.json")
         assert len(prompts) == len(prompt_data)
 
         total_score = 0

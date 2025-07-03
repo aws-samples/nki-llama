@@ -89,7 +89,7 @@ fi
 
 cd apex || { log_message "Failed to change directory to apex"; exit 1; }
 log_message "==== Checking out Apex version 23.05 ===="
-run_with_retry "git checkout 810ffae374a2b9cb4b5c5e28eaeca7d7998fca0c" "Checkout Apex 23.05" "critical"
+run_with_retry "git checkout 23.05" "Checkout Apex 23.05" "critical"
 
 # 3a. Overwrite setup.py with the nxd specific setup
 log_message "==== Creating custom setup.py for CPU-only Apex ===="
@@ -111,7 +111,7 @@ setup(
     packages=find_packages(
         exclude=("build", "csrc", "include", "tests", "dist", "docs", "tests", "examples", "apex.egg-info",)
     ),
-    install_requires=["packaging>20.6"],
+    install_requires=["packaging>20.6",],
     description="PyTorch Extensions written by NVIDIA",
 )
 EOF

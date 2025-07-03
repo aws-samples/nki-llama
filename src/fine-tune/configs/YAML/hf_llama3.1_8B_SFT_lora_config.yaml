@@ -6,7 +6,7 @@ trainer:
   devices: 32
   num_nodes: 1
   max_epochs: -1 # PTL default. In practice, max_steps will be reached first.
-  max_steps: 5000 # consumed_samples = global_step * micro_batch_size * data_parallel_size * accumulate_grad_batches
+  max_steps: 1000 # consumed_samples = global_step * micro_batch_size * data_parallel_size * accumulate_grad_batches
   log_every_n_steps: 10
   val_check_interval: 500 # we do not want val to run during training, hence setting it at a high number
   check_val_every_n_epoch: null
